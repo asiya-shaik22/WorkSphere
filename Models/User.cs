@@ -20,21 +20,21 @@ namespace WorkSphere.Models
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-
         // Projects created by this user
         public ICollection<Project> CreatedProjects { get; set; }
             = new List<Project>();
-
 
         // Tasks assigned to this user
         public ICollection<ProjectTask> AssignedTasks { get; set; }
             = new List<ProjectTask>();
 
+        // Tasks created by this user
+        public ICollection<ProjectTask> CreatedTasks { get; set; }
+            = new List<ProjectTask>();
 
         // Refresh tokens belonging to this user
         public ICollection<RefreshToken> RefreshTokens { get; set; }
             = new List<RefreshToken>();
-
 
         // Password reset tokens belonging to this user
         public ICollection<PasswordResetToken> PasswordResetTokens { get; set; }

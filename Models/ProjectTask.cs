@@ -10,6 +10,8 @@ namespace WorkSphere.Models
 
         public string? Description { get; set; }
 
+        public TaskType TaskType { get; set; } = TaskType.Task;
+
         public WorkSphere.Enums.TaskStatus Status { get; set; }
             = WorkSphere.Enums.TaskStatus.ToDo;
 
@@ -22,18 +24,16 @@ namespace WorkSphere.Models
 
         public DateTime? UpdatedAt { get; set; }
 
-
-        // Foreign Key - Project
         public int ProjectId { get; set; }
 
-        // Navigation property
         public Project Project { get; set; } = null!;
 
-
-        // Foreign Key - User assigned to the task
         public int? AssignedToId { get; set; }
 
-        // Navigation property
         public User? AssignedTo { get; set; }
+
+        public int CreatedById { get; set; }
+
+        public User CreatedBy { get; set; } = null!;
     }
 }

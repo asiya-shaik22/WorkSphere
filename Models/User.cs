@@ -20,6 +20,8 @@ namespace WorkSphere.Models
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
         // Projects created by this user
         public ICollection<Project> CreatedProjects { get; set; }
             = new List<Project>();

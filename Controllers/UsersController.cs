@@ -1,181 +1,93 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using WorkSphere.Data;
-using WorkSphere.Models;
+﻿
+using Microsoft.AspNetCore.Mvc;
+using WorkSphere.DTOs.Users;
+using WorkSphere.Services;
 
-namespace WorkSphere.Controllers
+
+namespace WorkSphere.Controllers;
+
+[ApiController]
+[Route("api/users")]
+public class UsersController : ControllerBase
 {
-    [ApiController]
-    [Route("api/users")]
-    public class UsersController : ControllerBase
+    private readonly IUserService _userService;
+
+    public UsersController(IUserService userService)
     {
-        private readonly AppDbContext _context;
+        _userService = userService;
+    }
 
-        public UsersController(AppDbContext context)
+    // POST: api/users
+    [HttpPost]
+    public async Task<ActionResult<UserResponse>> CreateUser(
+        CreateUserRequest request)
+    {
+        try
         {
-            _context = context;
-        }
-
-        // POST: api/users
-        // Create a new user
-        [HttpPost]
-        public async Task<IActionResult> CreateUser(UserCreateRequest request)
-        {
-            if (string.IsNullOrWhiteSpace(request.Name))
-            {
-                return BadRequest("Name is required.");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.Email))
-            {
-                return BadRequest("Email is required.");
-            }
-
-            var emailExists = await _context.Users
-                .AnyAsync(u => u.Email == request.Email);
-
-            if (emailExists)
-            {
-                return Conflict("A user with this email already exists.");
-            }
-
-            var user = new User
-            {
-                Name = request.Name,
-                Email = request.Email,
-                IsActive = request.IsActive,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+            var user = await _userService.CreateUserAsync(request);
 
             return CreatedAtAction(
                 nameof(GetUserById),
                 new { id = user.Id },
-                new
-                {
-                    user.Id,
-                    user.Name,
-                    user.Email,
-                    user.IsActive,
-                    user.CreatedAt
-                });
+                user);
         }
-
-        // GET: api/users
-        // Get all users
-        [HttpGet]
-        public async Task<IActionResult> GetUsers()
+        catch (InvalidOperationException ex)
         {
-            var users = await _context.Users
-                .Select(u => new
-                {
-                    u.Id,
-                    u.Name,
-                    u.Email,
-                    u.IsActive,
-                    u.CreatedAt
-                })
-                .ToListAsync();
-
-            return Ok(users);
+            return Conflict(new { message = ex.Message });
         }
+    }
 
-        // GET: api/users/{id}
-        // Get a specific user
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetUserById(int id)
+    // GET: api/users
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<UserResponse>>> GetUsers()
+    {
+        var users = await _userService.GetAllUsersAsync();
+
+        return Ok(users);
+    }
+
+    // GET: api/users/1
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<UserResponse>> GetUserById(int id)
+    {
+        var user = await _userService.GetUserByIdAsync(id);
+
+        if (user == null)
+            return NotFound(new { message = "User not found." });
+
+        return Ok(user);
+    }
+
+    // PUT: api/users/1
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<UserResponse>> UpdateUser(
+        int id,
+        UpdateUserRequest request)
+    {
+        try
         {
-            var user = await _context.Users
-                .Where(u => u.Id == id)
-                .Select(u => new
-                {
-                    u.Id,
-                    u.Name,
-                    u.Email,
-                    u.IsActive,
-                    u.CreatedAt
-                })
-                .FirstOrDefaultAsync();
+            var user = await _userService.UpdateUserAsync(id, request);
 
             if (user == null)
-            {
-                return NotFound("User not found.");
-            }
+                return NotFound(new { message = "User not found." });
 
             return Ok(user);
         }
-
-        // PUT: api/users/{id}
-        // Update user
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateUser(
-            int id,
-            UserUpdateRequest request)
+        catch (InvalidOperationException ex)
         {
-            var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Id == id);
-
-            if (user == null)
-            {
-                return NotFound("User not found.");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.Name))
-            {
-                return BadRequest("Name is required.");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.Email))
-            {
-                return BadRequest("Email is required.");
-            }
-
-            var emailExists = await _context.Users
-                .AnyAsync(u =>
-                    u.Email == request.Email &&
-                    u.Id != id);
-
-            if (emailExists)
-            {
-                return Conflict("A user with this email already exists.");
-            }
-
-            user.Name = request.Name;
-            user.Email = request.Email;
-            user.IsActive = request.IsActive;
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                user.Id,
-                user.Name,
-                user.Email,
-                user.IsActive,
-                user.CreatedAt
-            });
+            return Conflict(new { message = ex.Message });
         }
     }
 
-    // Request model for creating a user
-    public class UserCreateRequest
+    // DELETE: api/users/1
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeactivateUser(int id)
     {
-        public string Name { get; set; } = string.Empty;
+        var result = await _userService.DeactivateUserAsync(id);
 
-        public string Email { get; set; } = string.Empty;
+        if (!result)
+            return NotFound(new { message = "User not found." });
 
-        public bool IsActive { get; set; } = true;
-    }
-
-    // Request model for updating a user
-    public class UserUpdateRequest
-    {
-        public string Name { get; set; } = string.Empty;
-
-        public string Email { get; set; } = string.Empty;
-
-        public bool IsActive { get; set; } = true;
+        return NoContent();
     }
 }

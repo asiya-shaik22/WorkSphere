@@ -2,121 +2,59 @@
 using Microsoft.EntityFrameworkCore;
 using WorkSphere.Data;
 using WorkSphere.Models;
+using WorkSphere.Services;
+using WorkSphere.DTOs.ProjectMembers;
 
-namespace WorkSphere.Controllers
+
+namespace WorkSphere.Controllers;
+
+[ApiController]
+[Route("api/projects/{projectId:int}/members")]
+public class ProjectMembersController : ControllerBase
 {
-    [ApiController]
-    [Route("api/projects/{projectId}/members")]
-    public class ProjectMembersController : ControllerBase
+    private readonly IProjectMemberService _memberService;
+    public ProjectMembersController(IProjectMemberService memberService)
     {
-        private readonly AppDbContext _context;
+        _memberService = memberService;
+    }
 
-        public ProjectMembersController(AppDbContext context)
+    // POST: api/projects/{projectId}/members
+    [HttpPost]
+    public async Task<IActionResult> AddMember(int projectId, [FromBody] AddProjectMemberRequest request)
+    {
+        try
         {
-            _context = context;
+            var member = await _memberService.AddMemberAsync(projectId, request);
+            return Ok(member);
         }
-
-        // POST: api/projects/{projectId}/members
-        [HttpPost]
-        public async Task<IActionResult> AddMember(
-            int projectId,
-            AddProjectMemberRequest request)
+        catch (InvalidOperationException ex)
         {
-            var projectExists = await _context.Projects
-                .AnyAsync(p => p.Id == projectId);
-
-            if (!projectExists)
-                return NotFound("Project not found.");
-
-            var userExists = await _context.Users
-                .AnyAsync(u => u.Id == request.UserId);
-
-            if (!userExists)
-                return NotFound("User not found.");
-
-            var alreadyMember = await _context.ProjectMembers
-                .AnyAsync(pm =>
-                    pm.ProjectId == projectId &&
-                    pm.UserId == request.UserId);
-
-            if (alreadyMember)
-                return Conflict("User is already a member of this project.");
-
-            var member = new ProjectMember
-            {
-                ProjectId = projectId,
-                UserId = request.UserId,
-                JoinedAt = DateTime.UtcNow
-            };
-
-            _context.ProjectMembers.Add(member);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(
-                nameof(GetMembers),
-                new { projectId },
-                new
-                {
-                    member.Id,
-                    member.ProjectId,
-                    member.UserId,
-                    member.JoinedAt
-                });
+            return BadRequest(new { message = ex.Message });
         }
+    }
 
-        // GET: api/projects/{projectId}/members
-        [HttpGet]
-        public async Task<IActionResult> GetMembers(int projectId)
+    [HttpGet]   
+    public async Task<ActionResult<IEnumerable<ProjectMemberResponse>>> GetMembers(int projectId)
+    {
+        try
         {
-            var projectExists = await _context.Projects
-                .AnyAsync(p => p.Id == projectId);
-
-            if (!projectExists)
-                return NotFound("Project not found.");
-
-            var members = await _context.ProjectMembers
-                .Where(pm => pm.ProjectId == projectId)
-                .Include(pm => pm.User)
-                .Select(pm => new
-                {
-                    pm.User.Id,
-                    pm.User.Name,
-                    pm.User.Email,
-                    pm.User.IsActive,
-                    pm.JoinedAt
-                })
-                .ToListAsync();
-
+            var members = await _memberService.GetMembersAsync(projectId);
             return Ok(members);
         }
-
-        // DELETE:
-        // api/projects/{projectId}/members/{userId}
-        [HttpDelete("{userId}")]
-        public async Task<IActionResult> RemoveMember(
-            int projectId,
-            int userId)
+        catch (InvalidOperationException ex)
         {
-            var member = await _context.ProjectMembers
-                .FirstOrDefaultAsync(pm =>
-                    pm.ProjectId == projectId &&
-                    pm.UserId == userId);
-
-            if (member == null)
-                return NotFound("Project member not found.");
-
-            _context.ProjectMembers.Remove(member);
-            await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                message = "Project member removed successfully."
-            });
+            return NotFound(new { message = ex.Message });
         }
     }
 
-    public class AddProjectMemberRequest
+
+    [HttpDelete("{userId:int}")]
+    public async Task<IActionResult> RemoveMember(int projectId, int userId)
     {
-        public int UserId { get; set; }
+        var removed = await _memberService.RemoveMemberAsync(projectId, userId);
+        if (!removed)
+            return NotFound(new { message = "Project Member not found." });
+        return NoContent();
     }
+
 }

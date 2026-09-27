@@ -1,214 +1,98 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using WorkSphere.Data;
-using WorkSphere.Enums;
-using WorkSphere.Models;
+using WorkSphere.DTOs.Projects;
+namespace WorkSphere.Services;
 
-namespace WorkSphere.Controllers
+[ApiController]
+[Route("api/projects")]
+public class ProjectsController : ControllerBase
 {
-    [ApiController]
-    [Route("api/projects")]
-    public class ProjectsController : ControllerBase
+    private readonly IProjectService _projectService;
+    public ProjectsController(IProjectService projectService)
     {
-        private readonly AppDbContext _context;
+        _projectService = projectService;
+    }
 
-        public ProjectsController(AppDbContext context)
+    // POST: api/projects
+    [HttpPost]
+    public async Task<IActionResult> CreateProject([FromBody] CreateProjectRequest request)
+    {
+        try
         {
-            _context = context;
+            var project = await _projectService.CreateProjectAsync(request);
+            return CreatedAtAction(nameof(GetProjectById), new { id = project.Id }, project);
+
         }
-
-        // POST: api/projects
-        // Create a new project
-        [HttpPost]
-        public async Task<IActionResult> CreateProject(ProjectCreateRequest request)
-        {
-            if (string.IsNullOrWhiteSpace(request.Name))
+        catch (Exception ex) when (
+                ex is ArgumentException ||
+                ex is InvalidOperationException)
             {
-                return BadRequest("Project name is required.");
-            }
-
-            var userExists = await _context.Users
-                .AnyAsync(u => u.Id == request.CreatedById);
-
-            if (!userExists)
+            return BadRequest(new
             {
-                return BadRequest("Project creator does not exist.");
-            }
-
-            var project = new Project
-            {
-                Name = request.Name,
-                Description = request.Description,
-                Status = request.Status,
-                StartDate = request.StartDate,
-                EndDate = request.EndDate,
-                CreatedById = request.CreatedById,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Projects.Add(project);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(
-                nameof(GetProjectById),
-                new { id = project.Id },
-                project);
-        }
-
-        // GET: api/projects
-        // Get all projects
-        [HttpGet]
-        public async Task<IActionResult> GetProjects()
-        {
-            var projects = await _context.Projects
-                .Include(p => p.CreatedBy)
-                .Select(p => new
-                {
-                    p.Id,
-                    p.Name,
-                    p.Description,
-                    p.Status,
-                    p.StartDate,
-                    p.EndDate,
-                    p.CreatedAt,
-                    p.UpdatedAt,
-                    CreatedById = p.CreatedById,
-                    CreatedBy = p.CreatedBy.Name
-                })
-                .ToListAsync();
-
-            return Ok(projects);
-        }
-
-        // GET: api/projects/{id}
-        // Get a specific project
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetProjectById(int id)
-        {
-            var project = await _context.Projects
-                .Include(p => p.CreatedBy)
-                .Include(p => p.Tasks)
-                .Where(p => p.Id == id)
-                .Select(p => new
-                {
-                    p.Id,
-                    p.Name,
-                    p.Description,
-                    p.Status,
-                    p.StartDate,
-                    p.EndDate,
-                    p.CreatedAt,
-                    p.UpdatedAt,
-                    CreatedById = p.CreatedById,
-                    CreatedBy = p.CreatedBy.Name,
-                    TaskCount = p.Tasks.Count
-                })
-                .FirstOrDefaultAsync();
-
-            if (project == null)
-            {
-                return NotFound("Project not found.");
-            }
-
-            return Ok(project);
-        }
-
-        // PUT: api/projects/{id}
-        // Update a project
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateProject(
-            int id,
-            ProjectUpdateRequest request)
-        {
-            var project = await _context.Projects
-                .FirstOrDefaultAsync(p => p.Id == id);
-
-            if (project == null)
-            {
-                return NotFound("Project not found.");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.Name))
-            {
-                return BadRequest("Project name is required.");
-            }
-
-            var userExists = await _context.Users
-                .AnyAsync(u => u.Id == request.CreatedById);
-
-            if (!userExists)
-            {
-                return BadRequest("Project creator does not exist.");
-            }
-
-            project.Name = request.Name;
-            project.Description = request.Description;
-            project.Status = request.Status;
-            project.StartDate = request.StartDate;
-            project.EndDate = request.EndDate;
-            project.CreatedById = request.CreatedById;
-            project.UpdatedAt = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-
-            return Ok(project);
-        }
-
-        // DELETE: api/projects/{id}
-        // Archive a project instead of permanently deleting it
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> ArchiveProject(int id)
-        {
-            var project = await _context.Projects
-                .FirstOrDefaultAsync(p => p.Id == id);
-
-            if (project == null)
-            {
-                return NotFound("Project not found.");
-            }
-
-            project.Status = ProjectStatus.Archived;
-            project.UpdatedAt = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                message = "Project archived successfully.",
-                project.Id,
-                project.Name,
-                project.Status
+                message = ex.Message
             });
         }
     }
 
-    public class ProjectCreateRequest
+    // GET: api/projects
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<ProjectResponse>>> GetProjects()
     {
-        public string Name { get; set; } = string.Empty;
-
-        public string? Description { get; set; }
-
-        public ProjectStatus Status { get; set; } = ProjectStatus.Planned;
-
-        public DateTime StartDate { get; set; }
-
-        public DateTime? EndDate { get; set; }
-
-        public int CreatedById { get; set; }
+        var projects = await _projectService.GetProjectsAsync();
+        return Ok(projects);
     }
 
-    public class ProjectUpdateRequest
+    // GET: api/projects/{id}
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<ProjectResponse>> GetProjectById(int id)
     {
-        public string Name { get; set; } = string.Empty;
+        var project = await _projectService.GetProjectByIdAsync(id);
+        if (project == null)
+        {
+            return NotFound( new {message= $"Project with ID {id} not found." });
+        }
+        return Ok(project);
+    }
 
-        public string? Description { get; set; }
+    // PUT: api/projects/{id}
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<ProjectResponse>> UpdateProject(
+    int id,
+    [FromBody] UpdateProjectRequest request)
+    {
+        try
+        {
+            var updatedProject =
+                await _projectService.UpdateProjectAsync(id, request);
 
-        public ProjectStatus Status { get; set; } = ProjectStatus.Planned;
+            if (updatedProject == null)
+            {
+                return NotFound(new
+                {
+                    message = $"Project with ID {id} not found."
+                });
+            }
 
-        public DateTime StartDate { get; set; }
+            return Ok(updatedProject);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    }
 
-        public DateTime? EndDate { get; set; }
 
-        public int CreatedById { get; set; }
+    // DELETE: api/projects/{id}
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteProject(int id)
+    {
+        var result = await _projectService.DeleteProjectAsync(id);
+        if (!result)
+        {
+            return NotFound(new { message = $"Project with ID {id} not found." });
+        }
+        return NoContent();
     }
 }

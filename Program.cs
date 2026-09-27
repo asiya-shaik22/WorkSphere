@@ -1,10 +1,25 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 using WorkSphere.Data;
+using WorkSphere.Services;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+     {
+         options.JsonSerializerOptions.Converters
+            .Add(new JsonStringEnumConverter());
+     });
+
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<IProjectMemberService, ProjectMemberService>();
+builder.Services.AddScoped<ITaskService, TaskService>();
+builder.Services.AddScoped<ICommentService, CommentService>();
 
 // Add Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -30,6 +45,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
+
+app.MapGet("/", () => Results.Redirect("/swagger"));
 
 app.MapControllers();
 
